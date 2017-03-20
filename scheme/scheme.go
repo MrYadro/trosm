@@ -13,7 +13,58 @@ import (
 	overpass "github.com/serjvanilla/go-overpass"
 )
 
-func RemoveDuplicates(xs *[]string) {
+type stopData struct {
+	name   string
+	nameEn string
+	pois   []string
+}
+
+type routeData struct {
+	ref   string
+	name  string
+	from  string
+	to    string
+	stops []stopData
+}
+
+type routeParams struct {
+	ref         string
+	operator    string
+	network     string
+	poiDistance int
+}
+
+type naturalOrder []string
+
+func (s naturalOrder) Len() int {
+	return len(s)
+}
+
+func (s naturalOrder) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
+func (s naturalOrder) Less(i, j int) bool {
+	if len(s[i]) == len(s[j]) {
+		intI, _ := strconv.Atoi(s[i])
+		intJ, err := strconv.Atoi(s[j])
+		if err != nil {
+			strLen := len(s[i])
+			for k := strLen - 1; k >= 0; k-- {
+				if s[i][k] < s[j][k] {
+					return true
+				}
+			}
+		}
+		if intI < intJ {
+			return true
+		}
+		return false
+	}
+	return len(s[i]) < len(s[j])
+}
+
+func removeDuplicates(xs *[]string) {
 	found := make(map[string]bool)
 	j := 0
 	for i, x := range *xs {
@@ -60,117 +111,60 @@ func distance(lat1, lon1, lat2, lon2 float64) float64 {
 	return 2 * r * math.Asin(math.Sqrt(h))
 }
 
-func Mos(w http.ResponseWriter, req *http.Request) {
-	var transRef = req.FormValue("ref")
-	var transNet = req.FormValue("network")
-	var transOp = req.FormValue("operator")
-	var walkDistance = req.FormValue("distance")
-	themeColor := getColorFromName(transRef)
+func prepareData(route routeParams) []routeData {
+	route.network = strings.Replace(route.network, "\"", "\\\"", -1)
+	route.operator = strings.Replace(route.operator, "\"", "\\\"", -1)
+	route.ref = strings.Replace(route.ref, "\"", "\\\"", -1)
 
-	transNet = strings.Replace(transNet, "\"", "\\\"", -1)
-	transOp = strings.Replace(transOp, "\"", "\\\"", -1)
-	transRef = strings.Replace(transRef, "\"", "\\\"", -1)
-
-	if walkDistance == "" {
-		walkDistance = "500"
+	if route.poiDistance == 0 {
+		route.poiDistance = 300
 	}
-
-	var routesNum int
-	var stopsNum int
-
-	w.Header().Set("Content-Type", "image/svg+xml")
-	s := svg.New(w)
 
 	client := overpass.New()
 	result, _ := client.Query(`[out:json];
-	rel["network"="` + transNet + `"]["ref"="` + transRef + `"]["operator"="` + transOp + `"];
+	rel["network"="` + route.network + `"]["ref"="` + route.ref + `"]["operator"="` + route.operator + `"];
 	node(r) -> .stops;
 	(
-	  node(around.stops:500.0)["railway"="station"];
-	  node(around.stops:500.0)["public_transport"="stop_position"];
+		node(around.stops:500.0)["railway"="station"];
+		node(around.stops:500.0)["public_transport"="stop_position"];
 	);
 	(
-	  ._;
-	  rel(bn);
+		._;
+		rel(bn);
 	);
 	out body;`)
 	fmt.Println(result.Timestamp)
-	var stops []int
+
+	routesNum := 0
+	stopsNum := 0
+
+	var data []routeData
 	for _, relation := range result.Relations {
-		if relation.Tags["type"] == "route" && relation.Tags["ref"] == transRef {
-			stops = append(stops, 0)
-			fmt.Println(relation.Tags["name"]+": "+relation.Tags["from"]+" -> "+relation.Tags["to"], relation.ID)
+		if relation.Tags["type"] == "route" && relation.Tags["ref"] == route.ref {
+			data = append(data,
+				routeData{name: relation.Tags["name"],
+					from: relation.Tags["from"],
+					to:   relation.Tags["to"],
+					ref:  relation.Tags["ref"]})
 			for _, member := range relation.Members {
 				if member.Role == "stop" || member.Role == "stop_exit_only" || member.Role == "stop_entry_only" {
-					fmt.Println(member.Node.Tags["name"])
-					stopsNum++
-				}
-			}
-			stops[routesNum] = stopsNum
-			stopsNum = 0
-			routesNum++
-		}
-	}
-	docLen := 0
-	for i := range stops {
-		docLen += (125*2 + 443) + stops[i]*260
-	}
-
-	s.Start(1920, docLen)
-	for i := range stops {
-		prevStops := 0
-		if i > 0 {
-			prevStops += stops[i-1]
-		}
-		posFix := (125*2+443)*i + prevStops*260
-		s.Text(100, posFix+150, "Схема маршрута", "font-family:Fira Sans;font-weight:600;font-style: normal;text-anchor:start;font-size:50px;fill:black")
-		s.Text(100, posFix+216, "Scheme of route", "font-family:Fira Sans;font-style:normal;text-anchor:start;font-size:50px;fill:#514d48")
-		s.Rect(100, posFix+271, 300, 200, "fill:"+themeColor)
-		s.Text(250, posFix+421, transRef, "font-family:Fira Sans;text-anchor:middle;font-size:150px;fill:white")
-		s.Line(130, posFix+558, 130, posFix+580+stops[i]*260, "stroke-linecap:round;stroke:"+themeColor+";stroke-width:20")
-		s.Text(1820, posFix+580+stops[i]*260, "© OpenStreetMap contributors", "font-family:Fira Sans;text-anchor:end;font-size:20px;fill:black")
-	}
-
-	stopsNum = 0
-	routesNum = 0
-	stopName := ""
-	stopNameEn := ""
-
-	for _, relation := range result.Relations {
-		prevStops := 0
-		if relation.Tags["type"] == "route" && relation.Tags["ref"] == transRef {
-			if routesNum > 0 {
-				prevStops += stops[routesNum-1]
-			}
-			posFix := (125*2+443)*routesNum + prevStops*260
-			s.Text(450, posFix+354, relation.Tags["name"], "font-family:Fira Sans;text-anchor:start;font-size:50px;fill:black")
-			s.Text(450, posFix+425, relation.Tags["from"]+" - "+relation.Tags["to"], "font-family:Fira Sans;text-anchor:start;font-size:50px;fill:#514d48")
-			for _, member := range relation.Members {
-				if member.Role == "stop" || member.Role == "stop_exit_only" || member.Role == "stop_entry_only" {
-					stopName = member.Node.Tags["name"]
-					stopNameEn = member.Node.Tags["name:en"]
+					data[routesNum].stops = append(data[routesNum].stops, stopData{name: member.Node.Tags["name"],
+						nameEn: member.Node.Tags["name:en"]})
 					stopID := member.Node.ID
-					s.Circle(130, posFix+630+260*(stopsNum-prevStops), 20, "fill:white;stroke:"+themeColor+";stroke-width:10")
-					s.Text(205, posFix+647+260*(stopsNum-prevStops), stopName, "font-family:Fira Sans;text-anchor:start;font-weight:600;font-size:50px;fill:black")
-					s.Text(205, posFix+713+260*(stopsNum-prevStops), stopNameEn, "font-family:Fira Sans;text-anchor:start;font-size:50px;fill:#514d48")
-
-					stuffAround := []string{}
-					maxDist, _ := strconv.Atoi(walkDistance)
-
 					for _, mapNodes := range result.Nodes {
 						if (mapNodes.Lat != 0 || mapNodes.Lon != 0) && mapNodes.Tags["public_transport"] == "stop_position" && stopID == mapNodes.ID {
 							for _, potMapNodes := range result.Nodes {
 								if potMapNodes.Lat != 0 || potMapNodes.Lon != 0 {
 									len := distance(mapNodes.Lat, mapNodes.Lon, potMapNodes.Lat, potMapNodes.Lon)
-									if len < float64(maxDist) {
+									if len < float64(route.poiDistance) {
 										if potMapNodes.Tags["railway"] != "" {
-											stuffAround = append(stuffAround, "poezd")
+											data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, "poezd")
 										}
 										for _, mapRelations := range result.Relations {
-											if mapRelations.Tags["ref"] != transRef && mapRelations.Tags["ref"] != "" {
+											if mapRelations.Tags["ref"] != route.ref && mapRelations.Tags["ref"] != "" {
 												for _, potMapMembers := range mapRelations.Members {
 													if potMapMembers.Role == "stop" && potMapMembers.Node.ID == potMapNodes.ID {
-														stuffAround = append(stuffAround, mapRelations.Tags["ref"])
+														data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, mapRelations.Tags["ref"])
 													}
 												}
 											}
@@ -178,40 +172,116 @@ func Mos(w http.ResponseWriter, req *http.Request) {
 									}
 								}
 							}
+							sort.Sort(naturalOrder(data[routesNum].stops[stopsNum].pois))
+							removeDuplicates(&data[routesNum].stops[stopsNum].pois)
+							stopsNum++
 						}
 					}
-
-					sort.Strings(stuffAround)
-					RemoveDuplicates(&stuffAround)
-					horFix := 0
-					stuffWidth := 0
-					for _, stuff := range stuffAround {
-						strLen := utf8.RuneCountInString(stuff)
-						if strLen < 4 || stuff == "poezd" {
-							stuffWidth = 60
-						} else {
-							stuffWidth = strLen*18 + 20
-						}
-						s.Roundrect(200+horFix, posFix+745+260*(stopsNum-prevStops), stuffWidth, 60, 30, 30, "fill:"+getColorFromName(stuff))
-						if stuff != "poezd" {
-							s.Text(200+horFix+stuffWidth/2, posFix+786+260*(stopsNum-prevStops), stuff, "font-family:Fira Sans;text-anchor:middle;font-size:30px;fill:white")
-						} else {
-							s.Image(215+horFix, posFix+760+260*(stopsNum-prevStops), 30, 30, "train.svg", "")
-						}
-						if strLen < 4 || stuff == "poezd" {
-							horFix += 70
-						} else {
-							horFix += strLen*18 + 20 + 10
-						}
-					}
-
-					s.Line(0, posFix, 1920, posFix, "stroke:black;")
-
-					stopsNum++
 				}
 			}
+			stopsNum = 0
 			routesNum++
 		}
+	}
+	return data
+}
+
+func MTrans(w http.ResponseWriter, req *http.Request) {
+	walkDistance, err := strconv.Atoi(req.FormValue("distance"))
+	if err != nil {
+		walkDistance = 0
+	}
+	transRef := req.FormValue("ref")
+
+	routes := prepareData(routeParams{ref: transRef,
+		network:     req.FormValue("network"),
+		operator:    req.FormValue("operator"),
+		poiDistance: walkDistance})
+
+	themeColor := getColorFromName(transRef)
+
+	w.Header().Set("Content-Type", "image/svg+xml")
+	s := svg.New(w)
+
+	var pageStart []int
+	docLen := 0
+
+	for _, route := range routes {
+		pageStart = append(pageStart, docLen)
+		docLen += 125 // header + route ref and from to size
+		docLen += 522
+		for _, stop := range route.stops {
+			docLen += 67 // stop name size
+			if stop.nameEn != "" {
+				docLen += 67 // stop name:en size
+			}
+			docLen += 10                         // spacing between text and icons
+			docLen += 70 * (len(stop.pois) / 15) // pois size
+			docLen += 100
+		}
+		docLen += 125 // footer
+	}
+
+	s.Start(1920, docLen)
+
+	for rt, route := range routes {
+		s.Line(0, pageStart[rt]+0, 1920, pageStart[rt]+0, "stroke:black;")
+		s.Text(100, pageStart[rt]+150, "Схема маршрута", "font-family:Fira Sans;font-weight:600;font-style: normal;text-anchor:start;font-size:50px;fill:black")
+		s.Text(100, pageStart[rt]+216, "Scheme of route", "font-family:Fira Sans;font-style:normal;text-anchor:start;font-size:50px;fill:#514d48")
+		s.Rect(100, pageStart[rt]+271, 300, 200, "fill:"+themeColor)
+		s.Text(250, pageStart[rt]+421, transRef, "font-family:Fira Sans;text-anchor:middle;font-size:150px;fill:white")
+		if route.from != "" || route.to != "" {
+			s.Text(450, pageStart[rt]+354, route.name, "font-family:Fira Sans;text-anchor:start;font-size:50px;fill:black")
+			s.Text(450, pageStart[rt]+425, route.from+" - "+route.to, "font-family:Fira Sans;text-anchor:start;font-size:50px;fill:#514d48")
+		} else {
+			s.Text(450, pageStart[rt]+390, route.name, "font-family:Fira Sans;text-anchor:start;font-size:50px;fill:black")
+		}
+		var stopPos []int
+		vertFix := 0
+		for _, stop := range route.stops {
+			stopPos = append(stopPos, vertFix)
+			s.Text(205, pageStart[rt]+647+vertFix, stop.name, "font-family:Fira Sans;text-anchor:start;font-weight:600;font-size:50px;fill:black")
+			vertFix += 67
+			if stop.nameEn != "" {
+				s.Text(205, pageStart[rt]+647+vertFix, stop.nameEn, "font-family:Fira Sans;text-anchor:start;font-size:50px;fill:#514d48")
+				vertFix += 67
+			}
+
+			vertFix += 10
+
+			horFix := 0
+			stuffWidth := 0
+			for po, poi := range stop.pois {
+				strLen := utf8.RuneCountInString(poi)
+				if strLen < 4 || poi == "poezd" {
+					stuffWidth = 60
+				} else {
+					stuffWidth = strLen*18 + 20
+				}
+
+				s.Roundrect(200+horFix, pageStart[rt]+607+vertFix, stuffWidth, 60, 30, 30, "fill:"+getColorFromName(poi))
+				if poi != "poezd" {
+					s.Text(200+horFix+stuffWidth/2, pageStart[rt]+647+vertFix, poi, "font-family:Fira Sans;text-anchor:middle;font-size:30px;fill:white")
+				} else {
+					s.Image(215+horFix, pageStart[rt]+647+vertFix, 30, 30, "train.svg", "")
+				}
+				if strLen < 4 || poi == "poezd" {
+					horFix += 70
+				} else {
+					horFix += strLen*18 + 20 + 10
+				}
+				if (po+1)%15 == 0 && po != 0 {
+					vertFix += 70
+					horFix = 0
+				}
+			}
+			vertFix += 100
+		}
+		s.Line(130, pageStart[rt]+558, 130, pageStart[rt]+610+vertFix, "stroke-linecap:round;stroke:"+themeColor+";stroke-width:20")
+		for stop := range route.stops {
+			s.Circle(130, pageStart[rt]+630+stopPos[stop], 20, "fill:white;stroke:"+themeColor+";stroke-width:10")
+		}
+		s.Text(1820, pageStart[rt]+610+vertFix, "© OpenStreetMap contributors", "font-family:Fira Sans;text-anchor:end;font-size:20px;fill:black")
 	}
 	s.End()
 }

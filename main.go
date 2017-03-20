@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	http.Handle("/scheme", http.HandlerFunc(scheme.Mos))
+	http.Handle("/scheme", http.HandlerFunc(scheme.MTrans))
 	err := http.ListenAndServe(":2003", nil)
 	if err != nil {
 		log.Fatal("ListenAndServe:", err)
