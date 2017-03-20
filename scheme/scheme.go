@@ -207,6 +207,7 @@ func prepareData(route routeParams) []routeData {
 	return data
 }
 
+// MTrans generates MOSTRANS lookalike route maps
 func MTrans(w http.ResponseWriter, req *http.Request) {
 	walkDistance, err := strconv.Atoi(req.FormValue("distance"))
 	if err != nil {
@@ -283,7 +284,7 @@ func MTrans(w http.ResponseWriter, req *http.Request) {
 			vertFix += 10
 
 			horFix := 0
-			stuffWidth := 0
+			var stuffWidth int
 			for po, poi := range stop.pois {
 				strLen := utf8.RuneCountInString(poi.name)
 				if strLen < 4 || poi.name == "poezd" {
