@@ -64,6 +64,13 @@ func (s naturalOrder) Less(i, j int) bool {
 	return len(s[i]) < len(s[j])
 }
 
+func translateHeader(lang string) string {
+	trans := make(map[string]string)
+	trans["ru"] = "Схема маршрута"
+	trans["en"] = "Scheme of route"
+	return trans[lang]
+}
+
 func removeDuplicates(xs *[]string) {
 	found := make(map[string]bool)
 	j := 0
@@ -192,6 +199,11 @@ func MTrans(w http.ResponseWriter, req *http.Request) {
 		walkDistance = 0
 	}
 	transRef := req.FormValue("ref")
+	lang := req.FormValue("lang")
+
+	if lang == "" {
+		lang = "ru"
+	}
 
 	routes := prepareData(routeParams{ref: transRef,
 		network:     req.FormValue("network"),
@@ -226,7 +238,7 @@ func MTrans(w http.ResponseWriter, req *http.Request) {
 
 	for rt, route := range routes {
 		s.Line(0, pageStart[rt]+0, 1920, pageStart[rt]+0, "stroke:black;")
-		s.Text(100, pageStart[rt]+150, "Схема маршрута", "font-family:Fira Sans;font-weight:600;font-style: normal;text-anchor:start;font-size:50px;fill:black")
+		s.Text(100, pageStart[rt]+150, translateHeader(lang), "font-family:Fira Sans;font-weight:600;font-style: normal;text-anchor:start;font-size:50px;fill:black")
 		s.Text(100, pageStart[rt]+216, "Scheme of route", "font-family:Fira Sans;font-style:normal;text-anchor:start;font-size:50px;fill:#514d48")
 		s.Rect(100, pageStart[rt]+271, 300, 200, "fill:"+themeColor)
 		s.Text(250, pageStart[rt]+421, transRef, "font-family:Fira Sans;text-anchor:middle;font-size:150px;fill:white")
