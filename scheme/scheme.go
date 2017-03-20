@@ -68,6 +68,7 @@ func translateHeader(lang string) string {
 	trans := make(map[string]string)
 	trans["ru"] = "Схема маршрута"
 	trans["en"] = "Scheme of route"
+	trans["es"] = "Esquema de ruta"
 	return trans[lang]
 }
 
@@ -170,8 +171,10 @@ func prepareData(route routeParams) []routeData {
 										for _, mapRelations := range result.Relations {
 											if mapRelations.Tags["ref"] != route.ref && mapRelations.Tags["ref"] != "" {
 												for _, potMapMembers := range mapRelations.Members {
-													if potMapMembers.Role == "stop" && potMapMembers.Node.ID == potMapNodes.ID {
-														data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, mapRelations.Tags["ref"])
+													if potMapMembers.Type == "node" {
+														if potMapMembers.Role == "stop" && potMapMembers.Node.ID == potMapNodes.ID {
+															data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, mapRelations.Tags["ref"])
+														}
 													}
 												}
 											}
@@ -239,7 +242,9 @@ func MTrans(w http.ResponseWriter, req *http.Request) {
 	for rt, route := range routes {
 		s.Line(0, pageStart[rt]+0, 1920, pageStart[rt]+0, "stroke:black;")
 		s.Text(100, pageStart[rt]+150, translateHeader(lang), "font-family:Fira Sans;font-weight:600;font-style: normal;text-anchor:start;font-size:50px;fill:black")
-		s.Text(100, pageStart[rt]+216, "Scheme of route", "font-family:Fira Sans;font-style:normal;text-anchor:start;font-size:50px;fill:#514d48")
+		if lang != "en" {
+			s.Text(100, pageStart[rt]+216, "Scheme of route", "font-family:Fira Sans;font-style:normal;text-anchor:start;font-size:50px;fill:#514d48")
+		}
 		s.Rect(100, pageStart[rt]+271, 300, 200, "fill:"+themeColor)
 		s.Text(250, pageStart[rt]+421, transRef, "font-family:Fira Sans;text-anchor:middle;font-size:150px;fill:white")
 		if route.from != "" || route.to != "" {
@@ -275,7 +280,7 @@ func MTrans(w http.ResponseWriter, req *http.Request) {
 				if poi != "poezd" {
 					s.Text(200+horFix+stuffWidth/2, pageStart[rt]+647+vertFix, poi, "font-family:Fira Sans;text-anchor:middle;font-size:30px;fill:white")
 				} else {
-					s.Image(215+horFix, pageStart[rt]+647+vertFix, 30, 30, "train.svg", "")
+					s.Image(215+horFix, pageStart[rt]+623+vertFix, 30, 30, "train.svg", "")
 				}
 				if strLen < 4 || poi == "poezd" {
 					horFix += 70
