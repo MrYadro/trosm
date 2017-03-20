@@ -13,10 +13,15 @@ import (
 	overpass "github.com/serjvanilla/go-overpass"
 )
 
+type poi struct {
+	name  string
+	color string
+}
+
 type stopData struct {
 	name   string
 	nameEn string
-	pois   []string
+	pois   []poi
 }
 
 type routeData struct {
@@ -24,6 +29,7 @@ type routeData struct {
 	name  string
 	from  string
 	to    string
+	color string
 	stops []stopData
 }
 
@@ -34,7 +40,7 @@ type routeParams struct {
 	poiDistance int
 }
 
-type naturalOrder []string
+type naturalOrder []poi
 
 func (s naturalOrder) Len() int {
 	return len(s)
@@ -45,23 +51,21 @@ func (s naturalOrder) Swap(i, j int) {
 }
 
 func (s naturalOrder) Less(i, j int) bool {
-	if len(s[i]) == len(s[j]) {
-		intI, _ := strconv.Atoi(s[i])
-		intJ, err := strconv.Atoi(s[j])
+	if len(s[i].name) == len(s[j].name) {
+		intI, err := strconv.Atoi(s[i].name)
 		if err != nil {
-			strLen := len(s[i])
-			for k := strLen - 1; k >= 0; k-- {
-				if s[i][k] < s[j][k] {
-					return true
-				}
-			}
+			return false
+		}
+		intJ, err := strconv.Atoi(s[j].name)
+		if err != nil {
+			return false
 		}
 		if intI < intJ {
 			return true
 		}
 		return false
 	}
-	return len(s[i]) < len(s[j])
+	return len(s[i].name) < len(s[j].name)
 }
 
 func translateHeader(lang string) string {
@@ -69,15 +73,16 @@ func translateHeader(lang string) string {
 	trans["ru"] = "Схема маршрута"
 	trans["en"] = "Scheme of route"
 	trans["es"] = "Esquema de ruta"
+	trans["de"] = "Scheme der Route"
 	return trans[lang]
 }
 
-func removeDuplicates(xs *[]string) {
+func removeDuplicates(xs *[]poi) {
 	found := make(map[string]bool)
 	j := 0
 	for i, x := range *xs {
-		if !found[x] {
-			found[x] = true
+		if !found[x.name] {
+			found[x.name] = true
 			(*xs)[j] = (*xs)[i]
 			j++
 		}
@@ -151,9 +156,10 @@ func prepareData(route routeParams) []routeData {
 		if relation.Tags["type"] == "route" && relation.Tags["ref"] == route.ref {
 			data = append(data,
 				routeData{name: relation.Tags["name"],
-					from: relation.Tags["from"],
-					to:   relation.Tags["to"],
-					ref:  relation.Tags["ref"]})
+					from:  relation.Tags["from"],
+					to:    relation.Tags["to"],
+					ref:   relation.Tags["ref"],
+					color: relation.Tags["color"]})
 			for _, member := range relation.Members {
 				if member.Role == "stop" || member.Role == "stop_exit_only" || member.Role == "stop_entry_only" {
 					data[routesNum].stops = append(data[routesNum].stops, stopData{name: member.Node.Tags["name"],
@@ -166,14 +172,19 @@ func prepareData(route routeParams) []routeData {
 									len := distance(mapNodes.Lat, mapNodes.Lon, potMapNodes.Lat, potMapNodes.Lon)
 									if len < float64(route.poiDistance) {
 										if potMapNodes.Tags["railway"] != "" {
-											data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, "poezd")
+											if potMapNodes.Tags["railway"] == "station" {
+												data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, poi{name: "poezd", color: "#da4216"})
+											}
+											if potMapNodes.Tags["station"] == "subway" {
+												data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, poi{name: "poezd", color: "#ff0013"})
+											}
 										}
 										for _, mapRelations := range result.Relations {
 											if mapRelations.Tags["ref"] != route.ref && mapRelations.Tags["ref"] != "" {
 												for _, potMapMembers := range mapRelations.Members {
 													if potMapMembers.Type == "node" {
 														if potMapMembers.Role == "stop" && potMapMembers.Node.ID == potMapNodes.ID {
-															data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, mapRelations.Tags["ref"])
+															data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, poi{name: mapRelations.Tags["ref"], color: mapRelations.Tags["color"]})
 														}
 													}
 												}
@@ -230,8 +241,10 @@ func MTrans(w http.ResponseWriter, req *http.Request) {
 			if stop.nameEn != "" {
 				docLen += 67 // stop name:en size
 			}
-			docLen += 10                         // spacing between text and icons
-			docLen += 70 * (len(stop.pois) / 15) // pois size
+			docLen += 10 // spacing between text and icons
+			if len(stop.pois)%15 != 0 {
+				docLen += 70 * (len(stop.pois) / 15) // pois size
+			}
 			docLen += 100
 		}
 		docLen += 125 // footer
@@ -240,6 +253,9 @@ func MTrans(w http.ResponseWriter, req *http.Request) {
 	s.Start(1920, docLen)
 
 	for rt, route := range routes {
+		if route.color != "" {
+			themeColor = route.color
+		}
 		s.Line(0, pageStart[rt]+0, 1920, pageStart[rt]+0, "stroke:black;")
 		s.Text(100, pageStart[rt]+150, translateHeader(lang), "font-family:Fira Sans;font-weight:600;font-style: normal;text-anchor:start;font-size:50px;fill:black")
 		if lang != "en" {
@@ -269,25 +285,29 @@ func MTrans(w http.ResponseWriter, req *http.Request) {
 			horFix := 0
 			stuffWidth := 0
 			for po, poi := range stop.pois {
-				strLen := utf8.RuneCountInString(poi)
-				if strLen < 4 || poi == "poezd" {
+				strLen := utf8.RuneCountInString(poi.name)
+				if strLen < 4 || poi.name == "poezd" {
 					stuffWidth = 60
 				} else {
 					stuffWidth = strLen*18 + 20
 				}
 
-				s.Roundrect(200+horFix, pageStart[rt]+607+vertFix, stuffWidth, 60, 30, 30, "fill:"+getColorFromName(poi))
-				if poi != "poezd" {
-					s.Text(200+horFix+stuffWidth/2, pageStart[rt]+647+vertFix, poi, "font-family:Fira Sans;text-anchor:middle;font-size:30px;fill:white")
+				if poi.color != "" {
+					s.Roundrect(200+horFix, pageStart[rt]+607+vertFix, stuffWidth, 60, 30, 30, "fill:"+poi.color)
+				} else {
+					s.Roundrect(200+horFix, pageStart[rt]+607+vertFix, stuffWidth, 60, 30, 30, "fill:"+getColorFromName(poi.name))
+				}
+				if poi.name != "poezd" {
+					s.Text(200+horFix+stuffWidth/2, pageStart[rt]+647+vertFix, poi.name, "font-family:Fira Sans;text-anchor:middle;font-size:30px;fill:white")
 				} else {
 					s.Image(215+horFix, pageStart[rt]+623+vertFix, 30, 30, "train.svg", "")
 				}
-				if strLen < 4 || poi == "poezd" {
+				if strLen < 4 || poi.name == "poezd" {
 					horFix += 70
 				} else {
 					horFix += strLen*18 + 20 + 10
 				}
-				if (po+1)%15 == 0 && po != 0 {
+				if (po+1)%15 == 0 && po != 0 && len(stop.pois) != 15 {
 					vertFix += 70
 					horFix = 0
 				}
