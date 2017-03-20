@@ -29,8 +29,9 @@ func RemoveDuplicates(xs *[]string) {
 func getColorFromName(name string) string {
 	wayColors := [10]string{"#49b45d", "#3473ba", "#f67536", "#0ebdf5", "#ffb81b", "#815aa1", "#d6473d", "#704233", "#909093", "#68a0bd"}
 	outNum := 0
-	for i := 0; i < len(name); i++ {
-		color := fmt.Sprintf("%x", name[i])
+	strLen := utf8.RuneCountInString(name)
+	for i := 0; i < strLen; i++ {
+		color := fmt.Sprintf("%d", name[i])
 		num, err := strconv.Atoi(color)
 		if err != nil {
 			num = 0
@@ -185,12 +186,11 @@ func Mos(w http.ResponseWriter, req *http.Request) {
 					horFix := 0
 					stuffWidth := 0
 					for _, stuff := range stuffAround {
-						// stuff = "длинныйй"
 						strLen := utf8.RuneCountInString(stuff)
-						if strLen < 5 || stuff == "poezd" {
+						if strLen < 4 || stuff == "poezd" {
 							stuffWidth = 60
 						} else {
-							stuffWidth = (strLen-1)*18 + 50
+							stuffWidth = strLen*18 + 20
 						}
 						s.Roundrect(200+horFix, posFix+745+260*(stopsNum-prevStops), stuffWidth, 60, 30, 30, "fill:"+getColorFromName(stuff))
 						if stuff != "poezd" {
@@ -198,10 +198,10 @@ func Mos(w http.ResponseWriter, req *http.Request) {
 						} else {
 							s.Image(215+horFix, posFix+760+260*(stopsNum-prevStops), 30, 30, "train.svg", "")
 						}
-						if len(stuff) < 5 || stuff == "poezd" {
+						if strLen < 4 || stuff == "poezd" {
 							horFix += 70
 						} else {
-							horFix += (strLen-1)*18 + 50 + 10
+							horFix += strLen*18 + 20 + 10
 						}
 					}
 
