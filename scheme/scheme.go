@@ -16,6 +16,7 @@ import (
 type poi struct {
 	name  string
 	color string
+	poit  string
 }
 
 type stopData struct {
@@ -81,8 +82,8 @@ func removeDuplicates(xs *[]poi) {
 	found := make(map[string]bool)
 	j := 0
 	for i, x := range *xs {
-		if !found[x.name] {
-			found[x.name] = true
+		if !found[x.name+"_"+x.poit] {
+			found[x.name+"_"+x.poit] = true
 			(*xs)[j] = (*xs)[i]
 			j++
 		}
@@ -126,6 +127,7 @@ func distance(lat1, lon1, lat2, lon2 float64) float64 {
 
 func prepareData(route routeParams) []routeData {
 	route.network = strings.Replace(route.network, "\"", "\\\"", -1)
+	opNoEscaped := route.operator
 	route.operator = strings.Replace(route.operator, "\"", "\\\"", -1)
 	route.ref = strings.Replace(route.ref, "\"", "\\\"", -1)
 
@@ -153,7 +155,10 @@ func prepareData(route routeParams) []routeData {
 
 	var data []routeData
 	for _, relation := range result.Relations {
-		if relation.Tags["type"] == "route" && relation.Tags["ref"] == route.ref {
+		if relation.Tags["type"] == "route" &&
+			relation.Tags["ref"] == route.ref &&
+			(relation.Tags["network"] == route.network ||
+				relation.Tags["operator"] == opNoEscaped) {
 			data = append(data,
 				routeData{name: relation.Tags["name"],
 					from:  relation.Tags["from"],
@@ -173,10 +178,14 @@ func prepareData(route routeParams) []routeData {
 									if len < float64(route.poiDistance) {
 										if potMapNodes.Tags["railway"] != "" {
 											if potMapNodes.Tags["railway"] == "station" {
-												data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, poi{name: "poezd", color: "#da4216"})
+												data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, poi{name: "poi",
+													color: "#4f5d73",
+													poit:  "train"})
 											}
 											if potMapNodes.Tags["station"] == "subway" {
-												data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, poi{name: "poezd", color: "#ff0013"})
+												data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, poi{name: "poi",
+													color: "#ff0013",
+													poit:  "metro"})
 											}
 										}
 										for _, mapRelations := range result.Relations {
@@ -184,7 +193,9 @@ func prepareData(route routeParams) []routeData {
 												for _, potMapMembers := range mapRelations.Members {
 													if potMapMembers.Type == "node" {
 														if potMapMembers.Role == "stop" && potMapMembers.Node.ID == potMapNodes.ID {
-															data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, poi{name: mapRelations.Tags["ref"], color: mapRelations.Tags["color"]})
+															data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, poi{name: mapRelations.Tags["ref"],
+																color: mapRelations.Tags["color"],
+																poit:  "stop"})
 														}
 													}
 												}
@@ -287,7 +298,7 @@ func MTrans(w http.ResponseWriter, req *http.Request) {
 			var stuffWidth int
 			for po, poi := range stop.pois {
 				strLen := utf8.RuneCountInString(poi.name)
-				if strLen < 4 || poi.name == "poezd" {
+				if strLen < 4 || poi.name == "poi" {
 					stuffWidth = 60
 				} else {
 					stuffWidth = strLen*18 + 20
@@ -298,12 +309,12 @@ func MTrans(w http.ResponseWriter, req *http.Request) {
 				} else {
 					s.Roundrect(200+horFix, pageStart[rt]+607+vertFix, stuffWidth, 60, 30, 30, "fill:"+getColorFromName(poi.name))
 				}
-				if poi.name != "poezd" {
+				if poi.name != "poi" {
 					s.Text(200+horFix+stuffWidth/2, pageStart[rt]+647+vertFix, poi.name, "font-family:Fira Sans;text-anchor:middle;font-size:30px;fill:white")
 				} else {
-					s.Image(215+horFix, pageStart[rt]+623+vertFix, 30, 30, "train.svg", "")
+					s.Image(215+horFix, pageStart[rt]+623+vertFix, 30, 30, poi.poit+".svg", "")
 				}
-				if strLen < 4 || poi.name == "poezd" {
+				if strLen < 4 || poi.name == "poi" {
 					horFix += 70
 				} else {
 					horFix += strLen*18 + 20 + 10

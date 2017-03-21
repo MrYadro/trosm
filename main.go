@@ -8,6 +8,7 @@ import (
 )
 
 func main() {
+	http.Handle("/", http.FileServer(http.Dir("images/")))
 	http.Handle("/scheme", http.HandlerFunc(scheme.MTrans))
 	err := http.ListenAndServe(":2003", nil)
 	if err != nil {
