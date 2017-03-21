@@ -75,7 +75,12 @@ func translateHeader(lang string) string {
 	trans["en"] = "Scheme of route"
 	trans["es"] = "Esquema de ruta"
 	trans["de"] = "Scheme der Route"
-	return trans[lang]
+	trans["zh"] = "路线方案"
+	trans["ko"] = "노선 구성표"
+	if trans[lang] != "" {
+		return trans[lang]
+	}
+	return "Scheme of route"
 }
 
 func removeDuplicates(xs *[]poi) {
@@ -328,7 +333,11 @@ func MTrans(w http.ResponseWriter, req *http.Request) {
 		}
 		s.Line(130, pageStart[rt]+558, 130, pageStart[rt]+610+vertFix, "stroke-linecap:round;stroke:"+themeColor+";stroke-width:20")
 		for stop := range route.stops {
-			s.Circle(130, pageStart[rt]+630+stopPos[stop], 20, "fill:white;stroke:"+themeColor+";stroke-width:10")
+			if stop == 0 || stop == len(route.stops)-1 {
+				s.Circle(130, pageStart[rt]+630+stopPos[stop], 20, "fill:white;stroke:"+themeColor+";stroke-width:10")
+			} else {
+				s.Circle(130, pageStart[rt]+630+stopPos[stop], 25, "fill:"+themeColor+";stroke:white;stroke-width:10")
+			}
 		}
 		s.Text(1820, pageStart[rt]+610+vertFix, "© OpenStreetMap contributors", "font-family:Fira Sans;text-anchor:end;font-size:20px;fill:black")
 	}
