@@ -69,6 +69,53 @@ func (s naturalOrder) Less(i, j int) bool {
 	return len(s[i].name) < len(s[j].name)
 }
 
+func isPoi(node overpass.Node) (bool, poi) {
+	if node.Tags["railway"] == "station" {
+		if node.Tags["station"] != "" {
+			return true, poi{
+				name:  "poi",
+				color: node.Tags["colour"],
+				poit:  "train"}
+		}
+		if node.Tags["station"] == "subway" {
+			return true, poi{
+				name:  "poi",
+				color: node.Tags["colour"],
+				poit:  "metro"}
+		}
+	}
+	return false, poi{}
+}
+
+func colorOsm(color string) string {
+	colorMap := make(map[string]string)
+	if strings.HasPrefix(color, "#") {
+		return color
+	}
+	colorMap["black"] = "#000000"
+	colorMap["gray"] = "#808080"
+	colorMap["grey"] = "#808080"
+	colorMap["maroon"] = "#800000"
+	colorMap["olive"] = "#808000"
+	colorMap["green"] = "#008000"
+	colorMap["teal"] = "#008080"
+	colorMap["navy"] = "#000080"
+	colorMap["purple"] = "#800080"
+	colorMap["white"] = "#FFFFFF"
+	colorMap["silver"] = "#C0C0C0"
+	colorMap["red"] = "#FF0000"
+	colorMap["yellow"] = "#FFFF00"
+	colorMap["lime"] = "#00FF00"
+	colorMap["aqua"] = "#00FFFF"
+	colorMap["blue"] = "#0000FF"
+	colorMap["fuchsia"] = "#FF00FF"
+	colorMap["magenta"] = colorMap["fuchsia"]
+	if colorMap[color] == "" {
+		return "#FF00FF"
+	}
+	return colorMap[color]
+}
+
 func translateHeader(lang string) string {
 	trans := make(map[string]string)
 	trans["ru"] = "Схема маршрута"
@@ -165,11 +212,12 @@ func prepareData(route routeParams) []routeData {
 			(relation.Tags["network"] == route.network ||
 				relation.Tags["operator"] == opNoEscaped) {
 			data = append(data,
-				routeData{name: relation.Tags["name"],
+				routeData{
+					name:  relation.Tags["name"],
 					from:  relation.Tags["from"],
 					to:    relation.Tags["to"],
 					ref:   relation.Tags["ref"],
-					color: relation.Tags["color"]})
+					color: relation.Tags["colour"]})
 			for _, member := range relation.Members {
 				if member.Role == "stop" || member.Role == "stop_exit_only" || member.Role == "stop_entry_only" {
 					data[routesNum].stops = append(data[routesNum].stops, stopData{name: member.Node.Tags["name"],
@@ -181,26 +229,19 @@ func prepareData(route routeParams) []routeData {
 								if potMapNodes.Lat != 0 || potMapNodes.Lon != 0 {
 									len := distance(mapNodes.Lat, mapNodes.Lon, potMapNodes.Lat, potMapNodes.Lon)
 									if len < float64(route.poiDistance) {
-										if potMapNodes.Tags["railway"] != "" {
-											if potMapNodes.Tags["railway"] == "station" {
-												data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, poi{name: "poi",
-													color: "#4f5d73",
-													poit:  "train"})
-											}
-											if potMapNodes.Tags["station"] == "subway" {
-												data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, poi{name: "poi",
-													color: "#ff0013",
-													poit:  "metro"})
-											}
-										}
-										for _, mapRelations := range result.Relations {
-											if mapRelations.Tags["ref"] != route.ref && mapRelations.Tags["ref"] != "" {
-												for _, potMapMembers := range mapRelations.Members {
-													if potMapMembers.Type == "node" {
-														if potMapMembers.Role == "stop" && potMapMembers.Node.ID == potMapNodes.ID {
-															data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, poi{name: mapRelations.Tags["ref"],
-																color: mapRelations.Tags["color"],
-																poit:  "stop"})
+										potPoi, tempPoi := isPoi(*potMapNodes)
+										if potPoi {
+											data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, tempPoi)
+										} else {
+											for _, mapRelations := range result.Relations {
+												if mapRelations.Tags["ref"] != route.ref && mapRelations.Tags["ref"] != "" {
+													for _, potMapMembers := range mapRelations.Members {
+														if potMapMembers.Type == "node" {
+															if potMapMembers.Role == "stop" && potMapMembers.Node.ID == potMapNodes.ID {
+																data[routesNum].stops[stopsNum].pois = append(data[routesNum].stops[stopsNum].pois, poi{name: mapRelations.Tags["ref"],
+																	color: mapRelations.Tags["colour"],
+																	poit:  "stop"})
+															}
 														}
 													}
 												}
@@ -310,7 +351,7 @@ func MTrans(w http.ResponseWriter, req *http.Request) {
 				}
 
 				if poi.color != "" {
-					s.Roundrect(200+horFix, pageStart[rt]+607+vertFix, stuffWidth, 60, 30, 30, "fill:"+poi.color)
+					s.Roundrect(200+horFix, pageStart[rt]+607+vertFix, stuffWidth, 60, 30, 30, "fill:"+colorOsm(poi.color))
 				} else {
 					s.Roundrect(200+horFix, pageStart[rt]+607+vertFix, stuffWidth, 60, 30, 30, "fill:"+getColorFromName(poi.name))
 				}
