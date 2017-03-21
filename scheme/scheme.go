@@ -144,7 +144,8 @@ func removeDuplicates(xs *[]poi) {
 }
 
 func getColorFromName(name string) string {
-	wayColors := [10]string{"#49b45d", "#3473ba", "#f67536", "#0ebdf5", "#ffb81b", "#815aa1", "#d6473d", "#704233", "#909093", "#68a0bd"}
+	wayColors := [10]string{"#49b45d", "#3473ba", "#f67536", "#0ebdf5", "#ffb81b",
+		"#815aa1", "#d6473d", "#704233", "#909093", "#68a0bd"}
 	outNum := 0
 	strLen := utf8.RuneCountInString(name)
 	for i := 0; i < strLen; i++ {
