@@ -71,7 +71,7 @@ func (s naturalOrder) Less(i, j int) bool {
 
 func isPoi(node overpass.Node) (bool, poi) {
 	if node.Tags["railway"] == "station" {
-		if node.Tags["station"] != "" {
+		if node.Tags["station"] == "" {
 			return true, poi{
 				name:  "poi",
 				color: node.Tags["colour"],
@@ -94,7 +94,7 @@ func colorOsm(color string) string {
 	}
 	colorMap["black"] = "#000000"
 	colorMap["gray"] = "#808080"
-	colorMap["grey"] = "#808080"
+	colorMap["grey"] = colorMap["gray"]
 	colorMap["maroon"] = "#800000"
 	colorMap["olive"] = "#808000"
 	colorMap["green"] = "#008000"
@@ -189,7 +189,8 @@ func prepareData(route routeParams) []routeData {
 
 	client := overpass.New()
 	result, _ := client.Query(`[out:json];
-	rel["network"="` + route.network + `"]["ref"="` + route.ref + `"]["operator"="` + route.operator + `"];
+	rel["network"="` + route.network + `"]["ref"="` + route.ref +
+		`"]["operator"="` + route.operator + `"];
 	node(r) -> .stops;
 	(
 		node(around.stops:500.0)["railway"="station"];
@@ -314,27 +315,27 @@ func MTrans(w http.ResponseWriter, req *http.Request) {
 		if route.color != "" {
 			themeColor = route.color
 		}
-		s.Line(0, pageStart[rt]+0, 1920, pageStart[rt]+0, "stroke:black;")
-		s.Text(100, pageStart[rt]+150, translateHeader(lang), "font-family:Fira Sans;font-weight:600;font-style: normal;text-anchor:start;font-size:50px;fill:black")
+		s.Line(0, pageStart[rt], 1920, pageStart[rt]+0, "stroke:black;")                                                         // line for cutting
+		s.Text(100, pageStart[rt]+150, translateHeader(lang), "font-family:Fira Sans;font-weight:600;font-size:50px;fill:black") // header
 		if lang != "en" {
-			s.Text(100, pageStart[rt]+216, "Scheme of route", "font-family:Fira Sans;font-style:normal;text-anchor:start;font-size:50px;fill:#514d48")
+			s.Text(100, pageStart[rt]+216, "Scheme of route", "font-family:Fira Sans;font-size:50px;fill:#514d48") // header sub text
 		}
-		s.Rect(100, pageStart[rt]+271, 300, 200, "fill:"+themeColor)
-		s.Text(250, pageStart[rt]+421, transRef, "font-family:Fira Sans;text-anchor:middle;font-size:150px;fill:white")
+		s.Rect(100, pageStart[rt]+271, 300, 200, "fill:"+themeColor)                                                    // route ref background
+		s.Text(250, pageStart[rt]+421, transRef, "font-family:Fira Sans;text-anchor:middle;font-size:150px;fill:white") // route ref
 		if route.from != "" || route.to != "" {
-			s.Text(450, pageStart[rt]+354, route.name, "font-family:Fira Sans;text-anchor:start;font-size:50px;fill:black")
-			s.Text(450, pageStart[rt]+425, route.from+" - "+route.to, "font-family:Fira Sans;text-anchor:start;font-size:50px;fill:#514d48")
+			s.Text(450, pageStart[rt]+354, route.name, "font-family:Fira Sans;font-size:50px;fill:black")                  //route name
+			s.Text(450, pageStart[rt]+425, route.from+" - "+route.to, "font-family:Fira Sans;font-size:50px;fill:#514d48") //route from - to
 		} else {
-			s.Text(450, pageStart[rt]+390, route.name, "font-family:Fira Sans;text-anchor:start;font-size:50px;fill:black")
+			s.Text(450, pageStart[rt]+390, route.name, "font-family:Fira Sans;font-size:50px;fill:black") //route name if no from to
 		}
 		var stopPos []int
 		vertFix := 0
 		for _, stop := range route.stops {
 			stopPos = append(stopPos, vertFix)
-			s.Text(205, pageStart[rt]+647+vertFix, stop.name, "font-family:Fira Sans;text-anchor:start;font-weight:600;font-size:50px;fill:black")
+			s.Text(205, pageStart[rt]+647+vertFix, stop.name, "font-family:Fira Sans;font-weight:600;font-size:50px;fill:black") // stop name
 			vertFix += 67
 			if stop.nameEn != "" {
-				s.Text(205, pageStart[rt]+647+vertFix, stop.nameEn, "font-family:Fira Sans;text-anchor:start;font-size:50px;fill:#514d48")
+				s.Text(205, pageStart[rt]+647+vertFix, stop.nameEn, "font-family:Fira Sans;font-size:50px;fill:#514d48") // stop name in english if present
 				vertFix += 67
 			}
 
@@ -356,9 +357,9 @@ func MTrans(w http.ResponseWriter, req *http.Request) {
 					s.Roundrect(200+horFix, pageStart[rt]+607+vertFix, stuffWidth, 60, 30, 30, "fill:"+getColorFromName(poi.name))
 				}
 				if poi.name != "poi" {
-					s.Text(200+horFix+stuffWidth/2, pageStart[rt]+647+vertFix, poi.name, "font-family:Fira Sans;text-anchor:middle;font-size:30px;fill:white")
+					s.Text(200+horFix+stuffWidth/2, pageStart[rt]+647+vertFix, poi.name, "font-family:Fira Sans;text-anchor:middle;font-size:30px;fill:white") // number of route
 				} else {
-					s.Image(215+horFix, pageStart[rt]+623+vertFix, 30, 30, poi.poit+".svg", "")
+					s.Image(215+horFix, pageStart[rt]+623+vertFix, 30, 30, poi.poit+".svg", "") // icon of PT
 				}
 				if strLen < 4 || poi.name == "poi" {
 					horFix += 70
@@ -372,15 +373,15 @@ func MTrans(w http.ResponseWriter, req *http.Request) {
 			}
 			vertFix += 100
 		}
-		s.Line(130, pageStart[rt]+558, 130, pageStart[rt]+610+vertFix, "stroke-linecap:round;stroke:"+themeColor+";stroke-width:20")
+		s.Line(130, pageStart[rt]+558, 130, pageStart[rt]+610+vertFix, "stroke-linecap:round;stroke:"+themeColor+";stroke-width:20") // route "line"
 		for stop := range route.stops {
 			if stop == 0 || stop == len(route.stops)-1 {
-				s.Circle(130, pageStart[rt]+630+stopPos[stop], 20, "fill:white;stroke:"+themeColor+";stroke-width:10")
+				s.Circle(130, pageStart[rt]+630+stopPos[stop], 20, "fill:white;stroke:"+themeColor+";stroke-width:10") // first and last stop
 			} else {
-				s.Circle(130, pageStart[rt]+630+stopPos[stop], 25, "fill:"+themeColor+";stroke:white;stroke-width:10")
+				s.Circle(130, pageStart[rt]+630+stopPos[stop], 25, "fill:"+themeColor+";stroke:white;stroke-width:10") // other stops
 			}
 		}
-		s.Text(1820, pageStart[rt]+610+vertFix, "© OpenStreetMap contributors", "font-family:Fira Sans;text-anchor:end;font-size:20px;fill:black")
+		s.Text(1820, pageStart[rt]+610+vertFix, "© OpenStreetMap contributors", "font-family:Fira Sans;text-anchor:end;font-size:20px;fill:black") // ©
 	}
 	s.End()
 }
